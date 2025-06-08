@@ -30,6 +30,42 @@ extension CrossPlatformImage {
         return self.cgImage
         #endif
     }
+
+    /// 画像を指定した最大辺のサイズまで縮小
+    func scaledTo(maxSide: Int) -> CrossPlatformImage? {
+        guard let cg = cgImageExtract else { return nil }
+
+        let width = CGFloat(cg.width)
+        let height = CGFloat(cg.height)
+        let maxLength = max(width, height)
+
+        let ratio = min(CGFloat(maxSide) / maxLength, 1)
+        let targetWidth = Int(width * ratio)
+        let targetHeight = Int(height * ratio)
+
+        guard let context = CGContext(
+            data: nil,
+            width: targetWidth,
+            height: targetHeight,
+            bitsPerComponent: cg.bitsPerComponent,
+            bytesPerRow: 0,
+            space: cg.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: cg.bitmapInfo.rawValue
+        ) else {
+            return nil
+        }
+
+        context.interpolationQuality = .high
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: CGFloat(targetWidth), height: CGFloat(targetHeight)))
+
+        guard let scaledCG = context.makeImage() else { return nil }
+
+#if os(macOS)
+        return CrossPlatformImage(cgImage: scaledCG, size: NSSize(width: targetWidth, height: targetHeight))
+#else
+        return CrossPlatformImage(cgImage: scaledCG)
+#endif
+    }
 }
 extension CrossPlatformColor {
     /// 他の色と近いかどうかをしきい値で判定
@@ -179,7 +215,8 @@ public extension CrossPlatformImage {
 
 public extension CrossPlatformImage {
     func generateCorrectedColor(grid: Int = 4) -> Color {
-        let dominantColorsList = self.dominantColorsFast(grid: grid)
+        let baseImage = self.scaledTo(maxSide: 128) ?? self
+        let dominantColorsList = baseImage.dominantColorsFast(grid: grid)
         guard let mostFrequent = mostFrequentColor(colors: dominantColorsList, threshold: 0.1) else {
             return Color.clear
         }

@@ -211,8 +211,50 @@ public extension CrossPlatformImage {
         guard let mostFrequent = mostFrequentColor(colors: dominantColorsList, threshold: 0.1) else {
             return Color.clear
         }
-        let correctedColor = mostFrequent.with(minimumSaturation: 0.15)
-        return Color(correctedColor)
+        return Color(mostFrequent)
+    }
+    func generateCorrectedBottomColor(
+        bottom height: Int = 100,
+        maxWidth: Int? = nil
+    ) -> Color {
+        guard let cg = cgImageExtract, height > 0 else { return .clear }
+        let clampedHeight = min(height, cg.height)
+        let clampedWidth  = maxWidth.map { min($0, cg.width) } ?? cg.width
+        
+        let originX = (cg.width - clampedWidth) / 2
+        let originY = cg.height - clampedHeight
+        
+        guard let croppedCG = cg.cropping(to: CGRect(
+            x: originX,
+            y: originY,
+            width: clampedWidth,
+            height: clampedHeight
+        )) else { return .clear }
+        
+        guard let ctx = CGContext(
+            data: nil,
+            width: 1,
+            height: 1,
+            bitsPerComponent: 8,
+            bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return .clear }
+        
+        ctx.interpolationQuality = .none
+        ctx.draw(croppedCG, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        
+        guard let pixelBuffer = ctx.data else { return .clear }
+        let p = pixelBuffer.bindMemory(to: UInt8.self, capacity: 4)
+        
+        return Color(
+            CrossPlatformColor(
+                red:   CGFloat(p[0]) / 255.0,
+                green: CGFloat(p[1]) / 255.0,
+                blue:  CGFloat(p[2]) / 255.0,
+                alpha: CGFloat(p[3]) / 255.0
+            )
+        )
     }
 }
 func mostFrequentColor(
@@ -237,4 +279,45 @@ func mostFrequentColor(
         }
     }
     return colorFrequency.max { a, b in a.value < b.value }?.key
+}
+private extension CrossPlatformColor {
+    /// sRGB で正規化された RGBA (0‥1) を返す
+    /// 取得に失敗したら `nil`
+    func sRGBComponents() -> (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat)? {
+#if canImport(UIKit)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        if getRed(&r, green: &g, blue: &b, alpha: &a) {
+            return (r, g, b, a)
+        }
+        guard let cgSRGB = cgColor.converted(
+                    to: CGColorSpace(name: CGColorSpace.sRGB)!,
+                    intent: .defaultIntent,
+                    options: nil
+                ),
+              let comps = cgSRGB.components, comps.count >= 3 else {
+            return nil
+        }
+        return (comps[0], comps[1], comps[2], cgSRGB.alpha)
+        
+#else
+        guard let srgb = usingColorSpace(.sRGB) else { return nil }
+        return (srgb.redComponent, srgb.greenComponent, srgb.blueComponent, srgb.alphaComponent)
+#endif
+    }
+}
+
+public extension Color {
+    func isLight(threshold: CGFloat = 0.70) -> Bool {
+        guard let comps = CrossPlatformColor(self).sRGBComponents() else {
+            return false
+        }
+        func linear(_ c: CGFloat) -> CGFloat {
+            c <= 0.03928 ? c / 12.92
+                         : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * linear(comps.r)
+                       + 0.7152 * linear(comps.g)
+                       + 0.0722 * linear(comps.b)
+        return luminance > threshold
+    }
 }

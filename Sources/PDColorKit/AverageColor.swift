@@ -7,28 +7,23 @@
 
 import SwiftUI
 
-#if os(iOS) || os(tvOS) || os(watchOS)
-import UIKit
-public typealias CrossPlatformImage = UIImage
-public typealias CrossPlatformColor = UIColor
+#if canImport(UIKit)
+typealias CrossPlatformImage = UIImage
+typealias CrossPlatformColor = UIColor
 
-#elseif os(macOS)
-import AppKit
-public typealias CrossPlatformImage = NSImage
-public typealias CrossPlatformColor = NSColor
+#elseif canImport(AppKit)
+typealias CrossPlatformImage = NSImage
+typealias CrossPlatformColor = NSColor
 #endif
 extension CrossPlatformImage {
-    /// macOS の NSImage と iOS の UIImage で共通して CGImage を取り出す
     var cgImageExtract: CGImage? {
-        #if os(macOS)
-        // NSImage の場合
+#if canImport(AppKit)
         var rect = CGRect(origin: .zero, size: self.size)
         // macOSでは「ポイントサイズ」なので retina などスケールを考慮したい場合は別途対応が必要
         return self.cgImage(forProposedRect: &rect, context: nil, hints: nil)
-        #else
-        // iOS/ tvOS / watchOS の場合
+#else
         return self.cgImage
-        #endif
+#endif
     }
 }
 extension CrossPlatformColor {
@@ -52,7 +47,7 @@ extension CrossPlatformColor {
         var brightness: CGFloat = 0
         var alpha: CGFloat = 0
         
-#if os(macOS)
+#if canImport(AppKit)
         // NSColor は getHue(_:saturation:brightness:alpha:) が「Void」戻り値
         // なので、単に呼ぶだけでOK（失敗したかどうかは返ってこない）
         
@@ -88,8 +83,7 @@ extension CrossPlatformColor {
     }
 }
 private let grid :Int = 4
-public extension CrossPlatformImage {
-    /// 1ピクセルに縮小して平均色を取得する
+extension CrossPlatformImage {
     func averageColor() -> CrossPlatformColor? {
         guard let cg = cgImageExtract else { return nil }
         
@@ -175,9 +169,6 @@ public extension CrossPlatformImage {
         
         return colors
     }
-}
-
-public extension CrossPlatformImage {
     func scaledTo(maxSide: Int) -> CrossPlatformImage? {
         guard let cg = cgImageExtract else { return nil }
 
@@ -206,21 +197,21 @@ public extension CrossPlatformImage {
 
         guard let scaledCG = context.makeImage() else { return nil }
 
-#if os(macOS)
+#if canImport(AppKit)
         return CrossPlatformImage(cgImage: scaledCG, size: NSSize(width: targetWidth, height: targetHeight))
 #else
         return CrossPlatformImage(cgImage: scaledCG)
 #endif
     }
-    func generateCorrectedColor(grid: Int = 4) -> Color {
-        guard let baseImage = self.scaledTo(maxSide: 128) else { return .clear}
-        let dominantColorsList = baseImage.dominantColorsFast(grid: grid)
+}
+
+public extension CrossPlatformImage {
+    func generateCorrectedColor(grid: Int = 9) -> Color {
+        let dominantColorsList = self.dominantColorsFast(grid: grid)
         guard let mostFrequent = mostFrequentColor(colors: dominantColorsList, threshold: 0.1) else {
             return Color.clear
         }
         let correctedColor = mostFrequent.with(minimumSaturation: 0.15)
-        
-        // NSColor or UIColor を SwiftUI.Color に変換
         return Color(correctedColor)
     }
 }
@@ -245,6 +236,5 @@ func mostFrequentColor(
             colorFrequency[color] = 1
         }
     }
-    
     return colorFrequency.max { a, b in a.value < b.value }?.key
 }

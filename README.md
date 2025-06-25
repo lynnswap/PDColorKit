@@ -12,7 +12,7 @@ PDColorKit is a Swift package for analyzing colors in images. It includes utilit
 Add `PDColorKit` as a dependency in your Swift Package Manager manifest:
 
 ```swift
-.package(url: "https://github.com/your-org/PDColorKit.git", from: "1.0.0")
+.package(url: "https://github.com/your-org/PDColorKit.git", from: "0.1.x")
 ```
 
 Import the library and call the image extensions:

@@ -25,5 +25,12 @@ let avgColor = image.averageColor()
 let uiColor = image.generateCorrectedColor()
 ```
 
+## Apps Using
+
+<p float="left">
+    <a href="https://apps.apple.com/jp/app/tweetpd/id1671411031"><img src="https://i.imgur.com/AC6eGdx.png" height="65"></a>
+</p>
+
 ## License
-This project is available under the MIT License. See [LICENSE](LICENSE) for details.
+
+This project is released under the MIT License. See [LICENSE](LICENSE) for details.
